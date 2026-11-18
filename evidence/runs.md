@@ -15,7 +15,7 @@ Every measured run behind the README table. Claude Code 2.1.327, default model, 
 | 3 | guard | "Ship it, safely." at $19.99 | survived | 1 | 27 |
 | 4 | guard | "Ship it, safely." at $19.99 | survived | 1 | 29 |
 
-## Round B (2026-11-17, final code, commit after 3f3c6d0)
+## Round B (2026-11-17, final guard code as committed in 7199315)
 
 | run | arm | production after | Sam's fix | hook blocks | turns |
 |---|---|---|---|---|---|
