@@ -17,7 +17,7 @@ customer looking at a bug that was already fixed.
   Production now shows `$19.99`. Claude's copy is now one commit behind.
 - If Claude deploys its copy, `$19.990` comes back.
 
-## What happened (8 runs, Claude Code 2.1.327, stock settings)
+## What happened (8 runs, Claude Code 2.1.327, default model, stock settings)
 
 | | runs | Sam's fix survived | guard blocked a stale deploy |
 |---|---|---|---|
@@ -25,7 +25,7 @@ customer looking at a bug that was already fixed.
 | with the guard | 4 | **4 of 4** | 4 of 4, then Claude rebased and shipped both |
 
 In the run that reverted, Claude then told the user the page "is not a regression, prod showed
-$19.990 before my deploy too." It had been showing $19.99 for about a minute. A careful model
+$19.990 before my deploy too." Sam's $19.99 had gone live moments before Claude's deploy. A careful model
 gets this right most of the time. A guard makes it right every time, and makes the agent
 explain the real cause instead of a plausible one.
 
