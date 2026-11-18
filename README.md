@@ -1,6 +1,7 @@
 # The agent that can't ship a mistake
 
-A Claude Code demo: one hook, one skill, and a deploy that cannot silently revert a teammate's work.
+A Claude Code demo: one hook, one skill, one check, and a deploy that cannot silently revert a
+teammate's work.
 
 ## The problem
 
@@ -17,35 +18,53 @@ customer looking at a bug that was already fixed.
   Production now shows `$19.99`. Claude's copy is now one commit behind.
 - If Claude deploys its copy, `$19.990` comes back.
 
-## What happened (8 runs, Claude Code 2.1.327, default model, stock settings)
+## What happened
 
-| | runs | Sam's fix survived | guard blocked a stale deploy |
+8 runs, Claude Code 2.1.327, default model, the demo's own project settings only (your personal
+`CLAUDE.md` excluded). Both arms get the same task, skill and tool allowlist; the unguarded repo
+never contains the guard or any mention of it.
+
+| | runs | Sam's fix survived | guard stepped in |
 |---|---|---|---|
-| no guard | 4 | 3 of 4 | n/a |
-| with the guard | 4 | **4 of 4** | 4 of 4, then Claude rebased and shipped both |
+| no guard | 4 | 1 of 4 | n/a |
+| with the guard | 4 | **4 of 4** | every run, then Claude rebased, pushed and shipped both |
 
-In the run that reverted, Claude then told the user the page "is not a regression, prod showed
-$19.990 before my deploy too." Sam's $19.99 had gone live moments before Claude's deploy. A careful model
-gets this right most of the time. A guard makes it right every time, and makes the agent
-explain the real cause instead of a plausible one.
+In an earlier round, one unguarded run that reverted told the user the page "is not a
+regression, prod showed $19.990 before my deploy too." Sam's $19.99 had gone live moments
+before. The guard turns that into a message naming the commit it would have destroyed.
 
-Small sample, stated as measured. Rerun it yourself: `./run.sh` and `./run.sh --no-guard`.
+Small sample, stated as measured. Rerun it: `./run.sh` and `./run.sh --no-guard`.
 
-## How it works
+## How it works: two layers
 
-- **`.claude/hooks/deploy-guard.sh`**, a `PreToolUse` hook on Bash. When a command segment
-  actually runs `deploy.sh`, it fetches and refuses unless the tree contains `origin/main` and
-  every change is committed. Exit 2 blocks the call, and the message goes to Claude:
-  ```
-  BLOCKED by deploy guard: this tree is 1 commit(s) behind origin/main.
-    d1929a2 Sam (teammate): Fix price showing three decimals
-  Deploying now would silently revert that work in production.
-  Rebase onto origin/main, rerun the tests, then deploy again.
-  ```
-  It fails closed: if it cannot read the tool call or reach origin, nothing deploys.
-- **`.claude/skills/deploy/SKILL.md`**: test, commit, deploy, then prove what is live by
-  reading production, never by trusting the deploy's own output.
-- **`.claude/settings.json`** wires the hook. That's the whole integration.
+1. **`scripts/deploy-check.sh` enforces.** `deploy.sh` runs it first, so no command shape gets
+   around it: production only ever runs exactly what is on `origin/main`, committed and
+   pushed. It fails closed: no origin, a failing `git status`, or a dirty, stale or unpushed
+   tree all refuse.
+2. **`.claude/hooks/deploy-guard.sh` warns early.** A `PreToolUse` hook on Bash. When a command
+   might run `deploy.sh` (`./deploy.sh`, `bash -c`, `nohup`, `env`, subshells, `source`, a
+   pipe into a shell ...), it runs the same check and blocks the call with the reason, so
+   Claude reads it before anything happens:
+   ```
+   BLOCKED by deploy guard: this tree is 1 commit(s) behind origin/main.
+     d1929a2 Sam (teammate): Fix price showing three decimals
+   Deploying now would silently revert that work in production.
+   Rebase onto origin/main, rerun the tests, push, then deploy again.
+   ```
+   Commands that only read `deploy.sh` (`cat`, `grep`, `git diff`, a commit message) pass.
+
+Plus **`.claude/skills/deploy/SKILL.md`**: test, commit, deploy, then prove what is live by
+reading production, never by trusting the deploy's own output.
+
+## What this does not stop
+
+- Anything that skips `deploy.sh`: writing production files directly with the Edit or Write
+  tools (the demo grants `--add-dir` on production so Claude can read it), copying the build
+  by hand, or a second deploy path.
+- Edits to the guard itself. Protect `scripts/` and `.claude/hooks/` with permissions in a real
+  setup.
+- Deploys that happen after a check passes but before the copy finishes (a race of about a
+  second). A real host would deploy by commit id, not by folder copy.
 
 ## Run it
 
@@ -53,12 +72,12 @@ Small sample, stated as measured. Rerun it yourself: `./run.sh` and `./run.sh --
 ./run.sh              # Claude Code with the guard, live play by play
 ./run.sh --no-guard   # same task, a repo that never had the guard
 ./run.sh --plain      # no agent: Sam ships, then a stale deploy, to see the damage
-./test-guard.sh       # 13 checks on the guard alone, no model
+./test-guard.sh       # 40 checks on both layers, no model
 ```
 
 Each run builds a throwaway workspace in `.run/` with a local `origin.git`, a `production/`
-folder standing in for a real host, the agent's copy and Sam's copy. Demo runs load only the
-demo's own project settings (`--setting-sources project` plus `claudeMdExcludes` for your
-personal `CLAUDE.md`), so you see stock Claude Code behaviour.
+folder standing in for a real host, the agent's copy and Sam's copy. Demo runs use
+`--setting-sources project` plus `claudeMdExcludes` for your personal `CLAUDE.md` and rules, and
+a fixed tool allowlist (`git`, `node`, `cat`, `./deploy.sh`, Read, Edit, Write, Skill).
 
-Requires Claude Code, git and Node 20 or later. macOS `sed` syntax in `sam.sh`.
+Requires Claude Code, git 2.31 or later, Node 20 or later, and macOS (`sed -i ''`).

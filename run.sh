@@ -10,7 +10,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 MODE="${1:-}"
-W="$("$ROOT/setup.sh" $([ "$MODE" = "--no-guard" ] && echo --no-guard))"
+case "$MODE" in ""|--no-guard|--plain) ;; *) echo "unknown option: $MODE (use --no-guard or --plain)" >&2; exit 2 ;; esac
+# --plain shows what an unguarded deploy does, so it uses the unguarded repo.
+W="$("$ROOT/setup.sh" $([ -n "$MODE" ] && echo --no-guard))"
 PROD="$W/production"
 price() { grep -o 'Pro: [^ ]*' "$PROD/index.html" | cut -d' ' -f2; }
 head1() { grep -o '<h1>[^<]*' "$PROD/index.html" | cut -c5-; }
@@ -38,6 +40,7 @@ else
     done
   ) &
   SAM=$!
+  trap 'kill "$SAM" 2>/dev/null || true' EXIT
   cd "$W/app"
   echo "Task: $TASK"
   claude -p "$TASK" \
@@ -50,7 +53,7 @@ else
     --no-session-persistence \
     --no-chrome \
     --output-format stream-json --verbose \
-  | node "$ROOT/render.mjs" "$W/stream.jsonl"
+  | node "$ROOT/render.mjs" "$W/stream.jsonl" || echo "(claude or the renderer exited non-zero; judging production anyway)"
   kill "$SAM" 2>/dev/null || true
 fi
 

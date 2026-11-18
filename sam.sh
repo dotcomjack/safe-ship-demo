@@ -18,5 +18,5 @@ git add pricing.js pricing.test.mjs
 GIT_AUTHOR_NAME="Sam (teammate)" GIT_AUTHOR_EMAIL=sam@example.com GIT_COMMITTER_NAME="Sam (teammate)" GIT_COMMITTER_EMAIL=sam@example.com \
   git commit -q -m "Fix price showing three decimals"
 git push -q origin main
-PROD_DIR=../production ./deploy.sh >/dev/null
+PROD_DIR=../production ./deploy.sh >/dev/null || { echo "[sam] deploy failed" >&2; exit 1; }
 echo "[sam] pushed and deployed the price fix: production now shows \$19.99"

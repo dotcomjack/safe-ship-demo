@@ -1,46 +1,47 @@
 #!/bin/bash
-# PreToolUse guard for Claude Code: refuse ./deploy.sh unless this tree contains origin/main
-# and every change is committed. A deploy ships the working tree, so a stale tree silently
-# reverts work a teammate already shipped. Exit 2 blocks the tool call; stderr goes to Claude.
-# Fire only when a command segment RUNS deploy.sh (./deploy.sh, bash deploy.sh, FOO=1 ./deploy.sh),
-# never when one merely reads it (cat deploy.sh, grep x deploy.sh).
-runs=$(python3 -c '
+# PreToolUse hook for Claude Code: the EARLY WARNING. When a Bash command might run deploy.sh,
+# run the same check deploy.sh runs and, if it fails, block the call so Claude reads the reason
+# before anything happens. deploy.sh enforces the rule itself, so this hook can afford to be
+# conservative: a command is let through without a check only when every segment that mentions
+# deploy.sh plainly reads it (cat, grep, git ...). Exit 2 blocks; stderr goes to Claude.
+verdict=$(python3 -c '
 import json, re, shlex, sys
-cmd = json.load(sys.stdin).get("tool_input", {}).get("command", "")
-for seg in re.split(r"&&|\|\||;|\||\n", cmd):
-    try: toks = shlex.split(seg)
-    except ValueError: toks = seg.split()
-    while toks and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[0]): toks.pop(0)
-    if toks and toks[0] in ("bash", "sh", "zsh", "exec", "time"): toks.pop(0)
-    if toks and toks[0].split("/")[-1] == "deploy.sh":
-        print("yes"); break
+cmd = json.load(sys.stdin)["tool_input"]["command"]
+if not isinstance(cmd, str): raise SystemExit(1)
+if "deploy" not in cmd:
+    print("pass"); raise SystemExit
+# Heredoc bodies are data (commit messages, file contents), not commands.
+cmd = re.sub(r"<<-?\s*([\x27\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2\s*(\n|$)", " ", cmd, flags=re.S)
+READERS = {"cat","grep","egrep","fgrep","rg","head","tail","less","more","wc","diff","ls","git",
+           "stat","file","shasum","md5","sed","vim","vi","nano"}
+SHELLS = {"bash","sh","zsh","dash","source",".","eval","exec","xargs"}
+try:
+    lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    lex.commenters = ""
+    toks = list(lex)
+except ValueError:
+    print("check"); raise SystemExit
+segs, cur = [], []
+for t in toks:
+    if t and all(c in ";&|()<>" for c in t):
+        segs.append(cur); cur = []
+    else:
+        cur.append(t)
+segs.append(cur)
+def word(seg):
+    s = list(seg)
+    while s and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", s[0]): s.pop(0)
+    return s[0].split("/")[-1] if s else ""
+mentions = [s for s in segs if any("deploy" in t for t in s)]
+if any(word(s) in SHELLS for s in segs) or any(word(s) not in READERS for s in mentions):
+    print("check")
 else:
-    print("no")
-') || runs=error
-# Fail closed: if the tool call cannot be read, nothing gets past the guard.
-if [ "$runs" = "error" ] || [ -z "$runs" ]; then
-  echo "BLOCKED by deploy guard: could not read this command, so it cannot be proven safe." >&2
-  exit 2
-fi
-[ "$runs" = "yes" ] || exit 0
-cd "${CLAUDE_PROJECT_DIR:-.}" || exit 2
+    print("pass")
+') || verdict=error
 
-if ! git fetch -q origin 2>/dev/null; then
-  echo "BLOCKED by deploy guard: could not reach origin, so this tree cannot be proven current. Not deploying blind." >&2
-  exit 2
-fi
-if ! git merge-base --is-ancestor origin/main HEAD; then
-  n=$(git rev-list --count HEAD..origin/main)
-  {
-    echo "BLOCKED by deploy guard: this tree is $n commit(s) behind origin/main."
-    git log --format='  %h %an: %s' HEAD..origin/main
-    echo "Deploying now would silently revert that work in production."
-    echo "Rebase onto origin/main, rerun the tests, then deploy again."
-  } >&2
-  exit 2
-fi
-if [ -n "$(git status --porcelain)" ]; then
-  echo "BLOCKED by deploy guard: uncommitted changes. Commit first, so production always matches a commit." >&2
-  exit 2
-fi
-exit 0
+case "$verdict" in
+  pass) exit 0 ;;
+  check) exec "${CLAUDE_PROJECT_DIR:-.}/scripts/deploy-check.sh" ;;
+  *) echo "BLOCKED by deploy guard: could not read this command, so it cannot be proven safe." >&2; exit 2 ;;
+esac
