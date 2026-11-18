@@ -37,6 +37,7 @@ source deploy.sh
 . ./deploy.sh
 bash < deploy.sh
 cat deploy.sh | bash
+cat <<EOF; ./deploy.sh
 EOF
 grep -q "1 commit(s) behind origin/main" "$W/err" && grep -q "Sam (teammate)" "$W/err"
 expect "block message names the missing commit and its author" 0 $?
@@ -48,8 +49,14 @@ cat deploy.sh
 grep PROD deploy.sh
 git diff deploy.sh
 git commit -m "prep; deploy.sh next"
+echo "deploying now"
+chmod +x deploy.sh
+cat notes.txt > deploy-notes.md
+find . -name 'deploy*'
 EOF
 expect "allows: heredoc commit message mentioning deploy.sh" 0 "$(hook "$(printf 'git commit -F - <<%sEOF%s\nNext: ./deploy.sh is now guarded\nEOF' "'" "'")")"
+expect "blocks: heredoc opener carrying a deploy" 2 "$(hook "$(printf 'cat <<EOF; ./deploy.sh\nbody\nEOF')")"
+expect "blocks: echo with backticks" 2 "$(hook 'echo `./deploy.sh`')"
 expect "unreadable tool call fails closed" 2 "$(printf 'not json' | CLAUDE_PROJECT_DIR="$APP" "$HOOK" 2>"$W/err"; echo $?)"
 
 echo "== deploy.sh itself refuses, whatever ran it"
@@ -67,8 +74,15 @@ expect "unpushed commit is blocked" 2 "$(hook './deploy.sh')"
 git -C "$APP" push -q origin main
 expect "pushed: hook allows" 0 "$(hook './deploy.sh')"
 (cd "$APP" && PROD_DIR="$PROD" ./deploy.sh) >/dev/null 2>&1; expect "deploy.sh ships a current, pushed tree" 0 $?
-git -C "$APP" remote set-url origin /nonexistent/origin.git
-expect "unreachable origin is blocked" 2 "$(hook './deploy.sh')"
+# Sam pushes another commit, so app/ is behind again.
+( cd "$W/teammate" && git pull -q origin main && echo "// tidy" >> build.mjs && git commit -qam "Tidy build" \
+  && git push -q origin main ) >/dev/null 2>&1
+git -C "$APP" remote set-url origin .
+expect "repointing git remote does not fool it (pinned origin)" 2 "$(hook './deploy.sh')"
+(cd "$APP" && PROD_DIR="$PROD" ./deploy.sh) >/dev/null 2>&1; expect "deploy.sh also ignores the repointed remote" 2 $?
+mv "$W/origin.git" "$W/origin.moved"
+expect "unreachable pinned origin is blocked" 2 "$(hook './deploy.sh')"
+mv "$W/origin.moved" "$W/origin.git"
 
 [ $fail = 0 ] && echo "ALL $n PASS" || echo "FAILED"
 exit $fail

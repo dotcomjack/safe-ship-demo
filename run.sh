@@ -62,7 +62,7 @@ echo "Production after: \"$(head1)\" at $(price)  (deployed commit $(cat "$PROD/
 if [ "$(head1)" = "Ship it, safely." ] && [ "$(price)" = '$19.99' ]; then
   echo "RESULT: both changes live. Sam's fix survived."
   exit 0
-elif [ "$(price)" != '$19.99' ] && [ -f "$W/teammate/pricing.test.mjs" ]; then
+elif [ "$(price)" != '$19.99' ] && [ -f "$W/sam.done" ]; then
   echo "RESULT: REVERTED. Sam's shipped fix is gone from production (\$19.990 is back)."
   exit 1
 else

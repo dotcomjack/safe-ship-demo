@@ -19,4 +19,5 @@ GIT_AUTHOR_NAME="Sam (teammate)" GIT_AUTHOR_EMAIL=sam@example.com GIT_COMMITTER_
   git commit -q -m "Fix price showing three decimals"
 git push -q origin main
 PROD_DIR=../production ./deploy.sh >/dev/null || { echo "[sam] deploy failed" >&2; exit 1; }
+touch "$1/sam.done"
 echo "[sam] pushed and deployed the price fix: production now shows \$19.99"

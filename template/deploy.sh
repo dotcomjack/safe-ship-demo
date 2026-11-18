@@ -7,6 +7,8 @@ scripts/deploy-check.sh # guard
 PROD="${PROD_DIR:-../production}"
 node --test >/dev/null
 node build.mjs
+# Check again right before the copy: main may have moved during the tests and build.
+scripts/deploy-check.sh # guard
 mkdir -p "$PROD"
 cp dist/index.html "$PROD/index.html"
 git rev-parse --short HEAD > "$PROD/DEPLOYED_COMMIT"

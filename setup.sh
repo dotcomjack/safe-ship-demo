@@ -20,11 +20,13 @@ cp -R "$ROOT/template/." seed/
 (
   cd seed
   chmod +x deploy.sh scripts/deploy-check.sh .claude/hooks/deploy-guard.sh
+  echo "$W/origin.git" > scripts/origin.url   # the pinned origin the guard trusts
   # --no-guard: the repo never had the guard, so there is nothing for an agent to notice or restore.
   if [ "${GUARD:-on}" = "off" ]; then
-    rm -f .claude/settings.json .claude/hooks/deploy-guard.sh scripts/deploy-check.sh
-    rmdir .claude/hooks scripts
-    sed -i '' '/# guard$/d' deploy.sh
+    rm -f .claude/settings.json .claude/hooks/deploy-guard.sh scripts/deploy-check.sh scripts/origin.url
+    rmdir .claude/hooks scripts 2>/dev/null || true
+    sed -i '' -e '/# guard$/d' -e '/^# Check again right before the copy/d' deploy.sh
+    ! grep -q deploy-check deploy.sh || { echo "setup: guard still in unguarded deploy.sh" >&2; exit 1; }
     sed -i '' 's/^3\. Run `\.\/deploy\.sh`\..*/3. Run `.\/deploy.sh`./' .claude/skills/deploy/SKILL.md
   fi
   git add .gitignore package.json pricing.js build.mjs headline.test.mjs deploy.sh site CLAUDE.md .claude

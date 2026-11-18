@@ -11,9 +11,13 @@ if not isinstance(cmd, str): raise SystemExit(1)
 if "deploy" not in cmd:
     print("pass"); raise SystemExit
 # Heredoc bodies are data (commit messages, file contents), not commands.
-cmd = re.sub(r"<<-?\s*([\x27\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2\s*(\n|$)", " ", cmd, flags=re.S)
+# Keep the opener line (it can carry more commands: cat <<EOF; ./deploy.sh); drop only the body.
+cmd = re.sub(r"(<<-?\s*([\x27\"]?)(\w+)\2[^\n]*)\n.*?\n\s*\3\s*(?=\n|$)", r"\1", cmd, flags=re.S)
+if "`" in cmd:
+    print("check"); raise SystemExit
 READERS = {"cat","grep","egrep","fgrep","rg","head","tail","less","more","wc","diff","ls","git",
-           "stat","file","shasum","md5","sed","vim","vi","nano"}
+           "stat","file","shasum","md5","sed","vim","vi","nano","echo","printf","chmod","find",
+           "test","[","shellcheck"}
 SHELLS = {"bash","sh","zsh","dash","source",".","eval","exec","xargs"}
 try:
     lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
@@ -22,13 +26,16 @@ try:
     toks = list(lex)
 except ValueError:
     print("check"); raise SystemExit
-segs, cur = [], []
+# Split into segments at operators. A segment right after a redirect starts with a file name
+# (cat x > deploy-notes.md), so that first word is dropped, not treated as a command.
+segs, cur, after_redirect = [], [], False
 for t in toks:
     if t and all(c in ";&|()<>" for c in t):
-        segs.append(cur); cur = []
+        segs.append(cur[1:] if after_redirect else cur); cur = []
+        after_redirect = t in (">", ">>", "<", ">&", "&>", "<>", ">|")
     else:
         cur.append(t)
-segs.append(cur)
+segs.append(cur[1:] if after_redirect else cur)
 def word(seg):
     s = list(seg)
     while s and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", s[0]): s.pop(0)
