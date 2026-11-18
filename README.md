@@ -1,7 +1,23 @@
 # The agent that can't ship a mistake
 
 A Claude Code demo: one hook, one skill, one check, and a deploy that cannot silently revert a
-teammate's work.
+teammate's work. By DotcomJack.
+
+## Why this exists
+
+I build and run my products solo, with several Claude Code sessions working in parallel. On August 17,
+2026, two of them were shipping [AI Anyone](https://aianyone.com). One deployed a verified build
+at 1:10 PM. The other deployed three times from a copy cut before that build merged, and quietly
+put the old code back. Neither session was careless. Both had checked.
+
+The usual check compares the newest commit on `main` with the newest deploy, and that check is
+blind to exactly this case. The test that catches it is containment: what you are about to ship
+must contain everything already on `main`.
+
+Two days later I counted: 19 of my repos deploy this way, and one had a guard. So instead of a
+script per repo, I wrote one Claude Code hook that fires on the deploy itself, which means repo
+number 20 is covered on the day it is created. This repo is that idea, rebuilt small enough to
+run in two minutes, with the numbers to show it matters.
 
 ## The problem
 
