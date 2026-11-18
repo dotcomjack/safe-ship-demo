@@ -37,7 +37,9 @@ source deploy.sh
 . ./deploy.sh
 bash < deploy.sh
 cat deploy.sh | bash
-cat <<EOF; ./deploy.sh
+echo "$(./deploy.sh)"
+git commit -m "$(./deploy.sh)"
+find . -maxdepth 0 -exec ./deploy.sh ;
 EOF
 grep -q "1 commit(s) behind origin/main" "$W/err" && grep -q "Sam (teammate)" "$W/err"
 expect "block message names the missing commit and its author" 0 $?
@@ -52,7 +54,6 @@ git commit -m "prep; deploy.sh next"
 echo "deploying now"
 chmod +x deploy.sh
 cat notes.txt > deploy-notes.md
-find . -name 'deploy*'
 EOF
 expect "allows: heredoc commit message mentioning deploy.sh" 0 "$(hook "$(printf 'git commit -F - <<%sEOF%s\nNext: ./deploy.sh is now guarded\nEOF' "'" "'")")"
 expect "blocks: heredoc opener carrying a deploy" 2 "$(hook "$(printf 'cat <<EOF; ./deploy.sh\nbody\nEOF')")"

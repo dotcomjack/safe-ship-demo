@@ -20,7 +20,7 @@ customer looking at a bug that was already fixed.
 
 ## What happened
 
-16 runs, Claude Code 2.1.327, default model, the demo's own project settings only (your personal
+16 runs, Claude Code 2.1.327, model `claude-opus-5` (the default), the demo's own project settings only (your personal
 `CLAUDE.md` and rules excluded). Both arms get the same task, skill and tool allowlist; the
 unguarded repo never contains the guard or any mention of it.
 
@@ -29,7 +29,11 @@ unguarded repo never contains the guard or any mention of it.
 | no guard | 8 | 4 of 8 | n/a |
 | with the guard | 8 | **8 of 8** | every run, then Claude rebased, pushed and shipped both |
 
-Every run, round by round: [`evidence/runs.md`](evidence/runs.md). Two earlier rounds are not
+Every run, round by round: [`evidence/runs.md`](evidence/runs.md), with each run's full tool-call
+transcript in [`evidence/runs/`](evidence/runs/) (raw event streams stay private: they carry
+session ids; each transcript records its stream's SHA-256). Round A's guard arm ran the guard
+before the pinned-origin and heredoc fixes; round B ran commit 7199315 (later commits only widen
+the hook's early warning and the README; `deploy.sh` and its check are unchanged since). Two earlier rounds are not
 counted: one had Sam's fix land before the task started (stock Claude fetched first and caught
 it every time), and one had a flawed control whose skill still mentioned the guard.
 
@@ -67,7 +71,8 @@ reading production, never by trusting the deploy's own output.
   tools (the demo grants `--add-dir` on production so Claude can read it), copying the build
   by hand, or a second deploy path.
 - Tampering with the guard's inputs: editing `deploy.sh`, `scripts/` or `.claude/hooks/`,
-  changing `scripts/origin.url`, or swapping `git` via `PATH` or `GIT_DIR`. Protect those
+  changing `scripts/origin.url`, rewriting the pinned URL with `git config url.*.insteadOf` or
+  `GIT_CONFIG_*`, or swapping `git` via `PATH` or `GIT_DIR`. Protect those
   files with permissions in a real setup.
 - The moment between the final check and the copy (milliseconds here). A real host should
   deploy by commit id, not by copying a folder.

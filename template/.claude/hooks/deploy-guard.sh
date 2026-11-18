@@ -13,10 +13,11 @@ if "deploy" not in cmd:
 # Heredoc bodies are data (commit messages, file contents), not commands.
 # Keep the opener line (it can carry more commands: cat <<EOF; ./deploy.sh); drop only the body.
 cmd = re.sub(r"(<<-?\s*([\x27\"]?)(\w+)\2[^\n]*)\n.*?\n\s*\3\s*(?=\n|$)", r"\1", cmd, flags=re.S)
-if "`" in cmd:
+# Command substitution runs code even inside quotes or inside the arguments of a reader.
+if "`" in cmd or "$(" in cmd or "<(" in cmd or ">(" in cmd:
     print("check"); raise SystemExit
 READERS = {"cat","grep","egrep","fgrep","rg","head","tail","less","more","wc","diff","ls","git",
-           "stat","file","shasum","md5","sed","vim","vi","nano","echo","printf","chmod","find",
+           "stat","file","shasum","md5","sed","vim","vi","nano","echo","printf","chmod",
            "test","[","shellcheck"}
 SHELLS = {"bash","sh","zsh","dash","source",".","eval","exec","xargs"}
 try:
